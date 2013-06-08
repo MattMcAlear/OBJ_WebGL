@@ -1,10 +1,11 @@
 <html>
 	<head>
-		<title>Learning WebGL &mdash; lesson 10</title>
+		<title>OBJ Parser</title>
 		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
 
-		<script type="text/javascript" src="glMatrix-0.9.5.min.js"></script>
-		<script type="text/javascript" src="webgl-utils.js"></script>
+		<script type="text/javascript" src="js/glMatrix-0.9.5.min.js"></script>
+		<script type="text/javascript" src="js/webgl-utils.js"></script>
+		<script type="text/javascript" src="js/obj.js"></script>
 
 		<script id="shader-fs" type="x-shader/x-fragment">
 		    precision mediump float;
@@ -34,8 +35,37 @@
 		</script>
 		
 		<script type="text/javascript">
-		
+			//Global Vars
 		    var gl;
+		    var shaderProgram;
+		    var texture = [];
+		    
+		    var mvMatrix = mat4.create();
+		    var mvMatrixStack = [];
+		    var pMatrix = mat4.create();
+		    
+		    var currentlyPressedKeys = {};
+		    
+		    var pitch = 0;
+		    var pitchRate = 0;
+		
+		    var yaw = 0;
+		    var yawRate = 0;
+		    var xPos = 0;
+		    var yPos = 0.4;
+		    var zPos = 0;
+		    var speed = 0;
+		    
+		    var objVertexPositionBuffer = [];
+		    var objVertexTextureCoordBuffer = [];
+			var allTex = [];
+			var allTexCount = -1;
+			var allTexLength = [];
+			var uniqueTextures = [];
+			
+			var lastTime = 0;
+		    // Used to make us "jog" up and down as we move forward.
+		    var joggingAngle = 0;
 		
 		    function initGL(canvas) {
 		        try {
@@ -83,9 +113,7 @@
 		
 		        return shader;
 		    }
-		
-		    var shaderProgram;
-		
+					
 		    function initShaders() {
 		        var fragmentShader = getShader(gl, "shader-fs");
 		        var vertexShader = getShader(gl, "shader-vs");
@@ -111,48 +139,7 @@
 		        shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
 		        shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
 		    }
-				    
-		    var texture = new Array();
-		    
-			function loadTexture(filePath,texture)  {
-				var i = texture.length;
-				texture[i] = gl.createTexture();
-				texture[i].image = new Image();
-			  	texture[i].image.onload = function(){
-			  		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-			        gl.bindTexture(gl.TEXTURE_2D, texture[i]);
-			        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture[i].image);
-			        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-			        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-					
-					gl.bindTexture(gl.TEXTURE_2D, null);
-				}
-				texture[i].image.src = filePath;
-			} 
-					
-		    function initTexture(fileName) {
-		    	var request = new XMLHttpRequest();
-		        request.open("GET", "glMap.mtl");
-		        request.onreadystatechange = function () {
-		            if (request.readyState == 4) {
-		                var lines = request.responseText.split("\n");
-		                
-		                for(var i=0; i<lines.length; i++){
-			                var vals = lines[i].split(" ");
-			                
-			                if(vals[0] == "map_Kd"){
-			                	loadTexture(vals[1],texture);
-			                }
-		                }
-		            }
-		        }
-		        request.send();
-		    }
 			
-		    var mvMatrix = mat4.create();
-		    var mvMatrixStack = [];
-		    var pMatrix = mat4.create();
-		
 		    function mvPushMatrix() {
 		        var copy = mat4.create();
 		        mat4.set(mvMatrix, copy);
@@ -171,34 +158,18 @@
 		        gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
 		    }
 		
-		
 		    function degToRad(degrees) {
 		        return degrees * Math.PI / 180;
 		    }
-		
-		    var currentlyPressedKeys = {};
-		
+				
 		    function handleKeyDown(event) {
 		        currentlyPressedKeys[event.keyCode] = true;
 		    }
 		
-		
 		    function handleKeyUp(event) {
 		        currentlyPressedKeys[event.keyCode] = false;
 		    }
-		
-		    var pitch = 0;
-		    var pitchRate = 0;
-		
-		    var yaw = 0;
-		    var yawRate = 0;
-		
-		    var xPos = 0;
-		    var yPos = 0.4;
-		    var zPos = 0;
-		
-		    var speed = 0;
-		
+					
 		    function handleKeys() {
 		        if (currentlyPressedKeys[33]) {
 		            // Page Up
@@ -231,156 +202,6 @@
 		        }
 		
 		    }
-		    
-		    var objVertexPositionBuffer = new Array();
-		    var objVertexTextureCoordBuffer = new Array();
-			var allTex = [];
-			var allTexCount = -1;
-			var allTexLength = [];
-		
-		    function handleLoadedObject(data) {
-		        var lines = data.split("\n");
-		        
-		        var vertexCount = [];
-		        var vertexPositions = [];
-		        var vertexTextureCoords = [];
-		        
-		        var vertexCount1 = 0;
-				var vertexCount2 = 0;
-				var vertexPositions1 = [];
-				var vertexPositions2 = [];
-		        var vertexTextureCoords1 = [];
-				var vertexTextureCoords2 = [];
-				var vX = [];
-				var vY = [];
-				var vZ = [];
-				var vtX = [];
-				var vtY = [];
-				var vCount = 0;
-				var vtCount = 0;
-				
-				for(var i=0; i<lines.length; i++){
-					var vals = lines[i].split(" ");
-					
-					if(vals[0] == 'usemtl' && vals[1] != 'FrontColor'){
-						allTex.push(vals[1]);
-					}
-					if(vals[0] == 'v'){
-						vX[vCount] = vals[1];
-						vY[vCount] = vals[2];
-						vZ[vCount] = vals[3];
-						
-						vCount++;
-					}
-					if(vals[0] == 'vt'){
-						vtX[vtCount] = vals[1];
-						vtY[vtCount] = vals[2];
-						
-						vtCount++;
-					}
-				}
-				
-				for(var i=0; i<lines.length; i++){
-					var vals = lines[i].split(" ");
-					if(vals[0] == 'usemtl' && vals[1] != 'FrontColor'){
-						allTexCount++;
-						allTexLength.push(0);
-					}
-					if(vals[0] == 'f'){
-						for(var ii=1; ii<vals.length; ii++){
-							var val = vals[ii].split("/");
-							alert(vertexPositions.length);
-							if(allTex[allTexCount] == 'Metal_Brass_Ceiling'){
-								//alert(vertexPositions.length);
-								if(vertexPositions.length == 0){
-									vertexPositions[0] = [parseFloat(vX[(val[0]-1)]), parseFloat(vY[(val[0]-1)]), parseFloat(vZ[(val[0]-1)])];
-									
-									vertexTextureCoords[0] = [parseFloat(vtX[(val[1]-1)]), parseFloat(vtY[(val[1]-1)])];
-								}else{
-									vertexPositions[0].push(parseFloat(vX[(val[0]-1)]));
-									vertexPositions[0].push(parseFloat(vY[(val[0]-1)]));
-									vertexPositions[0].push(parseFloat(vZ[(val[0]-1)]));
-								
-									vertexTextureCoords[0].push(parseFloat(vtX[(val[1]-1)]));
-			                		vertexTextureCoords[0].push(parseFloat(vtY[(val[1]-1)]));
-								}
-								/*
-								vertexPositions[0].push(parseFloat(vX[(val[0]-1)]));
-								vertexPositions[0].push(parseFloat(vY[(val[0]-1)]));
-								vertexPositions[0].push(parseFloat(vZ[(val[0]-1)]));
-							
-								vertexTextureCoords[0].push(parseFloat(vtX[(val[1]-1)]));
-		                		vertexTextureCoords[0].push(parseFloat(vtY[(val[1]-1)]));
-								*/
-								vertexCount[0] += 1;
-							}
-							if(allTex[allTexCount] == 'Metal_Steel_Textured_White'){
-								if(vertexPositions.length == 0){
-									vertexPositions[1] = [parseFloat(vX[(val[0]-1)]), parseFloat(vY[(val[0]-1)]), parseFloat(vZ[(val[0]-1)])];
-									
-									vertexTextureCoords[1] = [parseFloat(vtX[(val[1]-1)]), parseFloat(vtY[(val[1]-1)])];
-								}else{
-									vertexPositions[1].push(parseFloat(vX[(val[0]-1)]));
-									vertexPositions[1].push(parseFloat(vY[(val[0]-1)]));
-									vertexPositions[1].push(parseFloat(vZ[(val[0]-1)]));
-								
-									vertexTextureCoords[1].push(parseFloat(vtX[(val[1]-1)]));
-			                		vertexTextureCoords[1].push(parseFloat(vtY[(val[1]-1)]));
-								}
-								/*
-								vertexPositions[1].push(parseFloat(vX[(val[0]-1)]));
-								vertexPositions[1].push(parseFloat(vY[(val[0]-1)]));
-								vertexPositions[1].push(parseFloat(vZ[(val[0]-1)]));
-								
-								vertexTextureCoords[1].push(parseFloat(vtX[(val[1]-1)]));
-		                		vertexTextureCoords[1].push(parseFloat(vtY[(val[1]-1)]));
-								*/
-								vertexCount[1] += 1;
-							}
-							
-							allTexLength[(allTexLength.length-1)]++;
-						}
-					}
-				}
-		        
-		        objVertexPositionBuffer[0] = gl.createBuffer();
-		        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer[0]);
-		        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPositions[0]), gl.STATIC_DRAW);
-		        objVertexPositionBuffer[0].itemSize = 3;
-		        objVertexPositionBuffer[0].numItems = vertexCount[0];
-		
-		        objVertexTextureCoordBuffer[0] = gl.createBuffer();
-		        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexTextureCoordBuffer[0]);
-		        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexTextureCoords[0]), gl.STATIC_DRAW);
-		        objVertexTextureCoordBuffer[0].itemSize = 2;
-		        objVertexTextureCoordBuffer[0].numItems = vertexCount[1];
-				
-				objVertexPositionBuffer[1] = gl.createBuffer();
-		        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer[1]);
-		        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPositions[1]), gl.STATIC_DRAW);
-		        objVertexPositionBuffer[1].itemSize = 3;
-		        objVertexPositionBuffer[1].numItems = vertexCount[1];
-		
-		        objVertexTextureCoordBuffer[1] = gl.createBuffer();
-		        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexTextureCoordBuffer[1]);
-		        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexTextureCoords[1]), gl.STATIC_DRAW);
-		        objVertexTextureCoordBuffer[1].itemSize = 2;
-		        objVertexTextureCoordBuffer[1].numItems = vertexCount[1];
-				
-		        document.getElementById("loadingtext").textContent = "";
-		    }
-		
-		
-		    function loadObject() {
-		        var request = new XMLHttpRequest();
-		        request.open("GET", "glMap.obj");
-		        request.onreadystatechange = function () {
-		            if (request.readyState == 4) {
-		                handleLoadedObject(request.responseText);
-		            }
-		        }
-		        request.send();
-		    }
 		
 		    function drawScene() {
 		        gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
@@ -398,39 +219,22 @@
 		        mat4.rotate(mvMatrix, degToRad(-yaw), [0, 1, 0]);
 		        mat4.translate(mvMatrix, [-xPos, -yPos, -zPos]);
 				
-				gl.bindBuffer(gl.ARRAY_BUFFER, objVertexTextureCoordBuffer[0]);
-				gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, objVertexTextureCoordBuffer[0].itemSize, gl.FLOAT, false, 0, 0);
-				
-				gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer[0]);
-				gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, objVertexPositionBuffer[0].itemSize, gl.FLOAT, false, 0, 0);
-				//alert(texture[1].image.src)
-				gl.activeTexture(gl.TEXTURE0);
-				gl.bindTexture(gl.TEXTURE_2D, texture[0]); 
-				gl.uniform1i(shaderProgram.samplerUniform, 0);
-				
-				setMatrixUniforms();	
-				
-				gl.drawArrays(gl.TRIANGLES, 0, objVertexPositionBuffer[0].numItems);
-				
-				
-				gl.bindBuffer(gl.ARRAY_BUFFER, objVertexTextureCoordBuffer[1]);
-				gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, objVertexTextureCoordBuffer[1].itemSize, gl.FLOAT, false, 0, 0);
-				
-				gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer[1]);
-				gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, objVertexPositionBuffer[1].itemSize, gl.FLOAT, false, 0, 0);
-				
-				gl.activeTexture(gl.TEXTURE0);
-				gl.bindTexture(gl.TEXTURE_2D, texture[1]); 
-				gl.uniform1i(shaderProgram.samplerUniform, 0);
-				
-				setMatrixUniforms();	
-				
-				gl.drawArrays(gl.TRIANGLES, 0, objVertexPositionBuffer[1].numItems);
+				//Set all buffers and invoke all draws
+				for(var i=0; i<uniqueTextures.length; i++){
+			        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexTextureCoordBuffer[i]);
+					gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, objVertexTextureCoordBuffer[i].itemSize, gl.FLOAT, false, 0, 0);
+					
+					gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer[i]);
+					gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, objVertexPositionBuffer[i].itemSize, gl.FLOAT, false, 0, 0);
+					gl.activeTexture(gl.TEXTURE0);
+					gl.bindTexture(gl.TEXTURE_2D, texture[i]); 
+					gl.uniform1i(shaderProgram.samplerUniform, 0);
+					
+					setMatrixUniforms();	
+					
+					gl.drawArrays(gl.TRIANGLES, 0, objVertexPositionBuffer[i].numItems);
+				}
 		    }
-			
-		    var lastTime = 0;
-		    // Used to make us "jog" up and down as we move forward.
-		    var joggingAngle = 0;
 		
 		    function animate() {
 		        var timeNow = new Date().getTime();
@@ -460,11 +264,11 @@
 		    }
 			
 		    function webGLStart() {
-		        var canvas = document.getElementById("lesson10-canvas");
+		        var canvas = document.getElementById("webGL");
 		        initGL(canvas);
 		        initShaders();
-		        initTexture();
-		        loadObject();
+		        objjs.initTexture('glMap', gl);
+		        objjs.loadObject('glMap');
 		
 		        gl.clearColor(0.0, 0.0, 0.0, 1.0);
 		        gl.enable(gl.DEPTH_TEST);
@@ -476,30 +280,11 @@
 		    }
 		
 		</script>
-		
-		<style type="text/css">
-		    #loadingtext {
-		        position:absolute;
-		        top:250px;
-		        left:150px;
-		        font-size:2em;
-		        color: white;
-		    }
-		</style>
 	</head>
 	<body onLoad="webGLStart();">
-	    <a href="http://learningwebgl.com/blog/?p=1067">&lt;&lt; Back to Lesson 10</a><br />
-	
-	    <canvas id="lesson10-canvas" style="border: none;" width="500" height="500"></canvas>
-	
-	    <div id="loadingtext">Loading world...</div>
-	
-	    <br/>
-	    Use the cursor keys or WASD to run around, and <code>Page Up</code>/<code>Page Down</code> to
-	look up and down.
-	
-	    <br/>
-	    <br/>
-	    <a href="http://learningwebgl.com/blog/?p=1067">&lt;&lt; Back to Lesson 10</a>
+		<h1 align="center">.OBJ Parser</h1>
+		<div align="center">	
+	    	<canvas id="webGL" style="border: none;" width="1000" height="500"></canvas>
+		</div>
 	</body>
 </html>
