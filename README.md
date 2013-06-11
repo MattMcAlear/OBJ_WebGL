@@ -1,7 +1,7 @@
 <h2>.OBJ Parser</h2>
 
 <b>Summary:</b>
-This is a .obj parser that is used to bring in outside models and integrate directly to native WebGL.
+This is a .obj parser that is used to bring in outside models and integrate directly to native WebGL. Here is some great documentation that I was using for parsing the .OBJ file -> http://www.martinreddy.net/gfx/3d/OBJ.spec
 
 <b>To-Do:</b>
 <ul>
