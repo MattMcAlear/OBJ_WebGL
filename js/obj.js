@@ -144,13 +144,11 @@ objjs.handleLoadedObject = function handleLoadedObject(data) {
 	
 	for(var i=1; i<uniqueTextures.length; i++){
 		result.push(
-			[
-				{
-					verticies:		vertexPositions[i],
-					vertexCount:	vertexCount[i],
-					textureCoords:	vertexTextureCoords[i],
-				}
-			]
+			{
+				verticies:		vertexPositions[i],
+				vertexCount:	vertexCount[i],
+				textureCoords:	vertexTextureCoords[i],
+			}
 		);
 	}
 	return result;	
