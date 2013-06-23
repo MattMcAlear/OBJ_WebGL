@@ -36,7 +36,7 @@ objjs.initTexture = function initTexture(fileName, gl) {
     request.send();
 }
 
-objjs.handleLoadedObject = function handleLoadedObject(data) {
+objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
     var lines = data.split("\n");
     
     var vertexCount = [];
@@ -49,6 +49,7 @@ objjs.handleLoadedObject = function handleLoadedObject(data) {
 	var vtY = [];
 	var vCount = 0;
 	var vtCount = 0;
+	var uniqueTextures = [];
 	
 	for(var i=0; i<lines.length; i++){
 		var vals = lines[i].split(" ");
@@ -120,6 +121,7 @@ objjs.handleLoadedObject = function handleLoadedObject(data) {
 	}
 	
 	//Create all buffers
+	var buffers = [];
 	for(var i=0; i<uniqueTextures.length; i++){
         objVertexPositionBuffer[i] = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer[i]);
@@ -132,26 +134,12 @@ objjs.handleLoadedObject = function handleLoadedObject(data) {
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexTextureCoords[i]), gl.STATIC_DRAW);
         objVertexTextureCoordBuffer[i].itemSize = 2;
         objVertexTextureCoordBuffer[i].numItems = vertexCount[i];
+		
+		buffers.push({	vertexPositionBuffer: 		objVertexPositionBuffer[i],
+						vertexTextureCoordBuffer:	objVertexTextureCoordBuffer[i]});
 	}
 	
-	var result = [
-		{
-			verticies:		vertexPositions[0],
-			vertexCount:	vertexCount[0],
-			textureCoords:	vertexTextureCoords[0],
-		}
-	];
-	
-	for(var i=1; i<uniqueTextures.length; i++){
-		result.push(
-			{
-				verticies:		vertexPositions[i],
-				vertexCount:	vertexCount[i],
-				textureCoords:	vertexTextureCoords[i],
-			}
-		);
-	}
-	return result;	
+	return buffers;
 }
 
 objjs.loadObject = function loadObject(fileName) {
