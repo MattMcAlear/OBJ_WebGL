@@ -50,6 +50,9 @@ objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
 	var vCount = 0;
 	var vtCount = 0;
 	var uniqueTextures = [];
+	var allTex = [];
+	var allTexCount = 0;
+	var allTexLength = [];
 	
 	for(var i=0; i<lines.length; i++){
 		var vals = lines[i].split(" ");
@@ -122,6 +125,8 @@ objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
 	
 	//Create all buffers
 	var buffers = [];
+	var objVertexPositionBuffer = [];
+	var objVertexTextureCoordBuffer = [];
 	for(var i=0; i<uniqueTextures.length; i++){
         objVertexPositionBuffer[i] = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer[i]);
