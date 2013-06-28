@@ -1,39 +1,52 @@
 "use strict";
 var objjs = {};
 
-objjs.loadTexture = function loadTexture(filePath,texture, gl)  {
-	var i = texture.length;
-	texture[i] = gl.createTexture();
-	texture[i].image = new Image();
-  	texture[i].image.onload = function(){
-  		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-        gl.bindTexture(gl.TEXTURE_2D, texture[i]);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture[i].image);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-		
-		gl.bindTexture(gl.TEXTURE_2D, null);
-	}
-	texture[i].image.src = filePath;
-} 
+objjs.loadMatl = function(data){
+	var materialData = data.match(/newmtl .*|map_Kd .*/g);
+	var materials = {};
 
-objjs.initTexture = function initTexture(fileName, gl) {
-	var request = new XMLHttpRequest();
-    request.open("GET", fileName+'.mtl');
-    request.onreadystatechange = function () {
-        if (request.readyState == 4) {
-            var lines = request.responseText.split("\n");
-            
-            for(var i=0; i<lines.length; i++){
-                var vals = lines[i].split(" ");
-                
-                if(vals[0] == "map_Kd"){
-                	objjs.loadTexture(vals[1], texture, gl);
-                }
-            }
-        }
-    }
-    request.send();
+	for (var i = 0; i < materialData.length; i++){
+		var line = materialData[i].split(' ');
+		if (line[0] == 'newmtl'){
+			var lastName = line[1];
+		}
+		else { //assume map_Kd for our path
+			materials[lastName] = line[1];
+		}
+	}
+
+	return materials;
+};
+
+objjs.initTexture = function initTexture(textureData, gl) {
+	var texturePaths = objjs.loadMatl(textureData);
+	var textures = {};
+	
+	for (var textureName in texturePaths){
+		var path = texturePaths[textureName];
+		
+		var glTexture = gl.createTexture();
+		glTexture.image = new Image();
+		glTexture.image.onload = function () {
+			//Can't remember if image.onload is async by default or not
+			//If it is async, we'll probably need some defered chain here
+			gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+			gl.bindTexture(gl.TEXTURE_2D, glTexture);
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, glTexture.image);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+			
+			gl.bindTexture(gl.TEXTURE_2D, null);
+		}
+		glTexture.image.src = path;
+		
+		textures[textureName] = {
+			path:		path,
+			glTexture:	glTexture
+		};
+	}
+	
+	return textures;
 }
 
 objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
@@ -141,7 +154,8 @@ objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
         objVertexTextureCoordBuffer[i].numItems = vertexCount[i];
 		
 		buffers.push({	vertexPositionBuffer: 		objVertexPositionBuffer[i],
-						vertexTextureCoordBuffer:	objVertexTextureCoordBuffer[i]});
+						vertexTextureCoordBuffer:	objVertexTextureCoordBuffer[i],
+						textureName:				uniqueTextures[i]});
 	}
 	
 	return buffers;
