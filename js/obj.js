@@ -18,18 +18,17 @@ objjs.loadMatl = function(data){
 	return materials;
 };
 
-objjs.initTexture = function initTexture(textureData, gl) {
+objjs.initTexture = function initTexture(textureData, gl, callback) {
 	var texturePaths = objjs.loadMatl(textureData);
 	var textures = {};
 	
+	var deferreds = [];
 	for (var textureName in texturePaths){
 		var path = texturePaths[textureName];
 		
 		var glTexture = gl.createTexture();
 		glTexture.image = new Image();
-		glTexture.image.onload = function () {
-			//Can't remember if image.onload is async by default or not
-			//If it is async, we'll probably need some defered chain here
+		glTexture.image.onload = function(){
 			gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 			gl.bindTexture(gl.TEXTURE_2D, glTexture);
 			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, glTexture.image);
@@ -37,6 +36,10 @@ objjs.initTexture = function initTexture(textureData, gl) {
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 			
 			gl.bindTexture(gl.TEXTURE_2D, null);
+			deferreds.pop();
+			if (deferreds.length == 0){	//last one
+				callback(textures);
+			}
 		}
 		glTexture.image.src = path;
 		
@@ -44,9 +47,9 @@ objjs.initTexture = function initTexture(textureData, gl) {
 			path:		path,
 			glTexture:	glTexture
 		};
+		
+		deferreds.push(textureName);
 	}
-	
-	return textures;
 }
 
 objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
@@ -138,23 +141,21 @@ objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
 	
 	//Create all buffers
 	var buffers = [];
-	var objVertexPositionBuffer = [];
-	var objVertexTextureCoordBuffer = [];
 	for(var i=0; i<uniqueTextures.length; i++){
-        objVertexPositionBuffer[i] = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer[i]);
+        var objVertexPositionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPositions[i]), gl.STATIC_DRAW);
-        objVertexPositionBuffer[i].itemSize = 3;
-        objVertexPositionBuffer[i].numItems = vertexCount[i];
+        objVertexPositionBuffer.itemSize = 3;
+        objVertexPositionBuffer.numItems = vertexCount[i];
 
-        objVertexTextureCoordBuffer[i] = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexTextureCoordBuffer[i]);
+        var objVertexTextureCoordBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexTextureCoordBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexTextureCoords[i]), gl.STATIC_DRAW);
-        objVertexTextureCoordBuffer[i].itemSize = 2;
-        objVertexTextureCoordBuffer[i].numItems = vertexCount[i];
+        objVertexTextureCoordBuffer.itemSize = 2;
+        objVertexTextureCoordBuffer.numItems = vertexCount[i];
 		
-		buffers.push({	vertexPositionBuffer: 		objVertexPositionBuffer[i],
-						vertexTextureCoordBuffer:	objVertexTextureCoordBuffer[i],
+		buffers.push({	vertexPositionBuffer: 		objVertexPositionBuffer,
+						vertexTextureCoordBuffer:	objVertexTextureCoordBuffer,
 						textureName:				uniqueTextures[i]});
 	}
 	
