@@ -29,18 +29,16 @@ objjs.initTexture = function initTexture(textureData, gl, callback) {
 		var glTexture = gl.createTexture();
 		glTexture.image = new Image();
 		glTexture.image.onload = function(){
-			gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-			gl.bindTexture(gl.TEXTURE_2D, glTexture);
-			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, glTexture.image);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-			
-			gl.bindTexture(gl.TEXTURE_2D, null);
-			deferreds.pop();
-			if (deferreds.length == 0){	//last one
-				callback(textures);
+			var _glTexture = glTexture;
+			return function(){
+				objjs.onImageLoad(_glTexture, gl);
+				
+				deferreds.pop();
+				if (deferreds.length == 0){	//last one
+					callback(textures);
+				}
 			}
-		}
+		}();
 		glTexture.image.src = path;
 		
 		textures[textureName] = {
@@ -50,7 +48,17 @@ objjs.initTexture = function initTexture(textureData, gl, callback) {
 		
 		deferreds.push(textureName);
 	}
-}
+};
+
+objjs.onImageLoad = function onImageLoad(glTexture, gl){
+	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+	gl.bindTexture(gl.TEXTURE_2D, glTexture);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, glTexture.image);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+	
+	gl.bindTexture(gl.TEXTURE_2D, null);
+};
 
 objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
     var lines = data.split("\n");
@@ -72,23 +80,14 @@ objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
 	
 	for(var i=0; i<lines.length; i++){
 		var vals = lines[i].split(" ");
-		
-		if(vals[0] == 'usemtl' && vals[1] != 'FrontColor'){
+		if (vals[1]){
+			vals[1] = vals[1].trim(); //had an issue with newlines at end of texture names
+		}
+		if(vals[0] == 'usemtl' && vals[1] != 'FrontColor' && vals[1] != 'ForegroundColor'){
 			allTex.push(vals[1]);
-			
-			if(uniqueTextures.length == 0){ 
-				uniqueTextures.push(vals[1]); 
-			}else{
-				var isUnique = true;
-				for(var a=0; a<uniqueTextures.length; a++){
-					//alert(vals[1]+' - '+allTex[a]);
-					if(vals[1] == uniqueTextures[a]){
-						isUnique = false;
-					}
-				}
-				if(isUnique == true){
-					uniqueTextures.push(vals[1]);
-				}
+						
+			if(uniqueTextures.indexOf(vals[1]) == -1){
+				uniqueTextures.push(vals[1]);
 			}
 		}
 		if(vals[0] == 'v'){
@@ -108,7 +107,7 @@ objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
 	
 	for(var i=0; i<lines.length; i++){
 		var vals = lines[i].split(" ");
-		if(vals[0] == 'usemtl' && vals[1] != 'FrontColor'){
+		if(vals[0] == 'usemtl' && vals[1] != 'FrontColor' && vals[1] != 'ForegroundColor'){
 			allTexCount++;
 			allTexLength.push(0);
 		}
