@@ -1,66 +1,42 @@
 "use strict";
 var objjs = {};
 
-objjs.loadMatl = function(data){
-	var materialData = data.match(/newmtl .*|map_Kd .*/g);
-	var materials = {};
-
-	for (var i = 0; i < materialData.length; i++){
-		var line = materialData[i].split(' ');
-		if (line[0] == 'newmtl'){
-			var lastName = line[1];
-		}
-		else { //assume map_Kd for our path
-			materials[lastName] = line[1];
-		}
+objjs.loadTexture = function loadTexture(filePath,texture, gl)  {
+	var i = texture.length;
+	texture[i] = gl.createTexture();
+	texture[i].image = new Image();
+  	texture[i].image.onload = function(){
+  		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.bindTexture(gl.TEXTURE_2D, texture[i]);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture[i].image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+		
+		gl.bindTexture(gl.TEXTURE_2D, null);
 	}
+	texture[i].image.src = filePath;
+} 
 
-	return materials;
-};
+objjs.initTexture = function initTexture(fileName, gl) {
+	var request = new XMLHttpRequest();
+    request.open("GET", fileName+'.mtl');
+    request.onreadystatechange = function () {
+        if (request.readyState == 4) {
+            var lines = request.responseText.split("\n");
+            
+            for(var i=0; i<lines.length; i++){
+                var vals = lines[i].split(" ");
+                
+                if(vals[0] == "map_Kd"){
+                	objjs.loadTexture(vals[1], texture, gl);
+                }
+            }
+        }
+    }
+    request.send();
+}
 
-objjs.initTexture = function initTexture(textureData, gl, callback) {
-	var texturePaths = objjs.loadMatl(textureData);
-	var textures = {};
-	
-	var deferreds = [];
-	for (var textureName in texturePaths){
-		var path = texturePaths[textureName];
-		
-		var glTexture = gl.createTexture();
-		glTexture.image = new Image();
-		glTexture.image.onload = function(){
-			var _glTexture = glTexture;
-			return function(){
-				objjs.onImageLoad(_glTexture, gl);
-				
-				deferreds.pop();
-				if (deferreds.length == 0){	//last one
-					callback(textures);
-				}
-			}
-		}();
-		glTexture.image.src = path;
-		
-		textures[textureName] = {
-			path:		path,
-			glTexture:	glTexture
-		};
-		
-		deferreds.push(textureName);
-	}
-};
-
-objjs.onImageLoad = function onImageLoad(glTexture, gl){
-	gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-	gl.bindTexture(gl.TEXTURE_2D, glTexture);
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, glTexture.image);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-	gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-	
-	gl.bindTexture(gl.TEXTURE_2D, null);
-};
-
-objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
+objjs.handleLoadedObject = function handleLoadedObject(data) {
     var lines = data.split("\n");
     
     var vertexCount = [];
@@ -73,21 +49,26 @@ objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
 	var vtY = [];
 	var vCount = 0;
 	var vtCount = 0;
-	var uniqueTextures = [];
-	var allTex = [];
-	var allTexCount = 0;
-	var allTexLength = [];
 	
 	for(var i=0; i<lines.length; i++){
 		var vals = lines[i].split(" ");
-		if (vals[1]){
-			vals[1] = vals[1].trim(); //had an issue with newlines at end of texture names
-		}
-		if(vals[0] == 'usemtl' && vals[1] != 'FrontColor' && vals[1] != 'ForegroundColor'){
+		
+		if(vals[0] == 'usemtl' && vals[1] != 'FrontColor'){
 			allTex.push(vals[1]);
-						
-			if(uniqueTextures.indexOf(vals[1]) == -1){
-				uniqueTextures.push(vals[1]);
+			
+			if(uniqueTextures.length == 0){ 
+				uniqueTextures.push(vals[1]); 
+			}else{
+				var isUnique = true;
+				for(var a=0; a<uniqueTextures.length; a++){
+					//alert(vals[1]+' - '+allTex[a]);
+					if(vals[1] == uniqueTextures[a]){
+						isUnique = false;
+					}
+				}
+				if(isUnique == true){
+					uniqueTextures.push(vals[1]);
+				}
 			}
 		}
 		if(vals[0] == 'v'){
@@ -107,7 +88,7 @@ objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
 	
 	for(var i=0; i<lines.length; i++){
 		var vals = lines[i].split(" ");
-		if(vals[0] == 'usemtl' && vals[1] != 'FrontColor' && vals[1] != 'ForegroundColor'){
+		if(vals[0] == 'usemtl' && vals[1] != 'FrontColor'){
 			allTexCount++;
 			allTexLength.push(0);
 		}
@@ -139,26 +120,40 @@ objjs.handleLoadedObject = function handleLoadedObject(data, gl) {
 	}
 	
 	//Create all buffers
-	var buffers = [];
 	for(var i=0; i<uniqueTextures.length; i++){
-        var objVertexPositionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer);
+        objVertexPositionBuffer[i] = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexPositionBuffer[i]);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPositions[i]), gl.STATIC_DRAW);
-        objVertexPositionBuffer.itemSize = 3;
-        objVertexPositionBuffer.numItems = vertexCount[i];
+        objVertexPositionBuffer[i].itemSize = 3;
+        objVertexPositionBuffer[i].numItems = vertexCount[i];
 
-        var objVertexTextureCoordBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexTextureCoordBuffer);
+        objVertexTextureCoordBuffer[i] = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, objVertexTextureCoordBuffer[i]);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexTextureCoords[i]), gl.STATIC_DRAW);
-        objVertexTextureCoordBuffer.itemSize = 2;
-        objVertexTextureCoordBuffer.numItems = vertexCount[i];
-		
-		buffers.push({	vertexPositionBuffer: 		objVertexPositionBuffer,
-						vertexTextureCoordBuffer:	objVertexTextureCoordBuffer,
-						textureName:				uniqueTextures[i]});
+        objVertexTextureCoordBuffer[i].itemSize = 2;
+        objVertexTextureCoordBuffer[i].numItems = vertexCount[i];
 	}
 	
-	return buffers;
+	var result = [
+		{
+			verticies:		vertexPositions[0],
+			vertexCount:	vertexCount[0],
+			textureCoords:	vertexTextureCoords[0],
+		}
+	];
+	
+	for(var i=1; i<uniqueTextures.length; i++){
+		result.push(
+			[
+				{
+					verticies:		vertexPositions[i],
+					vertexCount:	vertexCount[i],
+					textureCoords:	vertexTextureCoords[i],
+				}
+			]
+		);
+	}
+	return result;	
 }
 
 objjs.loadObject = function loadObject(fileName) {
