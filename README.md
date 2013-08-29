@@ -2,10 +2,16 @@
 
 <b>Summary:</b>
 <<<<<<< HEAD
+<<<<<<< HEAD
 This is a .obj parser that is used to bring in outside models and integrate directly to native WebGL.
 =======
 This is a .obj parser that is used to bring in outside models and integrate directly to native WebGL. Here is some great documentation that I was using for parsing the .OBJ file -> http://www.martinreddy.net/gfx/3d/OBJ.spec
 >>>>>>> parent of c6a5ab2... Update README.md
+=======
+This is a .obj parser that is used to bring in outside models and integrate directly to native WebGL. 
+
+Here is some great documentation that I was using for parsing the .OBJ file -> http://www.martinreddy.net/gfx/3d/OBJ.spec
+>>>>>>> 3d1d403ccc7082fcc42f24f035619a50bd32d6aa
 
 <b>To-Do:</b>
 <ul>
